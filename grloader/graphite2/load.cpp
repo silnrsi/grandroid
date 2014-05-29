@@ -59,73 +59,6 @@ void reloca_fns(soinfo *si, Elf32_Rela *rela, unsigned count, func_map *map, uns
 // itself at the start of a page.
 #define PAGE_END(x)    PAGE_START((x) + (PAGE_SIZE-1))
 
-#if 0
-typedef struct pagemanager {
-    struct pagemanager *next;
-    const char * start;
-    char * local;
-    size_t len;
-    int prot;
-} pagemanager;
-
-static pagemanager *localpages = NULL;
-
-static char *addpage(const char *start, size_t len, int prot)
-{
-    pagemanager *tp;
-    for (tp = localpages; tp; tp = tp->next)
-    {
-        if (tp->start <= start && tp->start + tp->len >= start + len)
-            return tp->local + start - tp->start;
-        else if (tp->start < start + len && tp->start + tp->len > start)
-            break;
-    }
-    if (!tp)
-    {
-        tp = calloc(1, sizeof(*tp));
-        tp->next = localpages;
-        tp->prot = prot;
-        localpages = tp;
-        tp->start = PAGE_START(start);
-        const char *end = PAGE_END(start + start - tp->start + len);
-        tp->len = tp->start - end;
-        tp->local = malloc(tp->len);
-        memcpy(tp->local, tp->start, len);      // can't overlap
-    }
-    if (tp->start > start)
-    {
-        const char *newstart = PAGE_START(start);
-        int addlen = tp->start - newstart;
-        tp->start = newstart;
-        tp->local = realloc(tp->local, tp->len + addlen);
-        memcpy(tp->local, tp->start, addlen);
-        tp->len += addlen;
-    }
-    if (tp->start + tp->len < start + len)
-    {
-        const char *newend = PAGE_END(start + len);
-        int addlen = newend - (tp->start + tp->len);
-        tp->local = realloc(tp->local, tp->len + addlen);
-        memcpy(tp->local + tp->len, start - tp->start + tp->len, addlen);
-        tp->len += addlen;
-    }
-    return tp->local + (start - tp->start);
-}
-
-static void remappages()
-{
-    pagemanager *tp;
-    for (tp = localpages; tp; tp = tp->next)
-    {
-        void *newbase = mmap(tp->start, tp->len, tp->prot | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_UNINITIALIZED, -1, 0);
-        memcpy(newbase, tp->local, tp->len);
-        if (!(tp->prot & PROT_WRITE))
-            mprotect(newbase, tp->prot);
-    }
-}
-#endif
-
 static int
 phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
                           int               phdr_count,
@@ -159,7 +92,7 @@ phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
     return res;
 }
 
-void load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer)
+bool load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer)
 {
     soinfo *soHead = (soinfo *)dlopen("libdl.so", 0);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
@@ -174,10 +107,16 @@ void load_fns(const char *srcname, const char *targetname, func_map *map, int nu
 //  See "ELF for the Arm Architecture" sect. 4.6.3, p 21. But we don't strip because that's Thumb code's job
         map[i].ptarget = dlsym(soTarget, map[i].starget);
         if (!map[i].ptarget)
+        {
             SLOGD("Failed to find %s in %s", map[i].starget, targetname);
+            return true;
+        }
         map[i].psrc = dlsym(soSrc, map[i].ssrc);
         if (!map[i].psrc)
+        {
             SLOGD("Failed to find %s in %s", map[i].ssrc, srcname);
+            return true;
+        }
     }
     
     pthread_mutex_lock(&dl_lock);
@@ -235,6 +174,7 @@ void load_fns(const char *srcname, const char *targetname, func_map *map, int nu
     dlclose(soHead);
     dlclose(soTarget);
     dlclose(soSrc);
+    return false;
 }
 
 void unload_loaded(char *srcname, char *tgtname, func_map *map, int num_map)
@@ -363,7 +303,7 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
     Elf32_Addr bias = sdkVer > 16 ? soSrc->load_bias : soSrc->base;
     int fnoffset;
     pthread_mutex_lock(&dl_lock);
-    if (soSrc && phdr_table_set_load_prot(soSrc->phdr, soSrc->phnum, bias, PROT_WRITE))
+    if (!soSrc || phdr_table_set_load_prot(soSrc->phdr, soSrc->phnum, bias, PROT_WRITE))
         return true;
 #if defined(ANDROID_ARM_LINKER)
     unsigned short *ptgt = reinterpret_cast<unsigned short *>(tgtfn);
@@ -377,6 +317,7 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
 //    ptgt[1] = reinterpret_cast<unsigned int>(srcfn) - 8;      // subtract 8 for pipeline
 #endif
     phdr_table_set_load_prot(soSrc->phdr, soSrc->phnum, bias, 0);
+    pthread_mutex_unlock(&dl_lock);
     return false;
 }
 
@@ -497,6 +438,7 @@ Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn
     SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
     soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
+    if (!soSrc || !soTarget) return 0;
     void *fnSrc = dlsym(soSrc, srcfn);
     if (!fnSrc) return 0;
     SLOGD("%s base %x and %s base %x", targetname, soTarget->base, srcname, soSrc->base);

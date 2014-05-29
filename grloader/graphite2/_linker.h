@@ -50,7 +50,7 @@ typedef struct fnmap {
     void *psrc;
 } func_map;
 
-void load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer);
+bool load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer);
 bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer);
 Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards);
 

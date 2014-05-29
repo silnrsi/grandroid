@@ -28,14 +28,28 @@
 #define GRANDROID_H
 
 #include "SkTypeface.h"
-#include "harfbuzz.h"
 #include "graphite2/Font.h"
 #include <android/asset_manager.h>
+#include "ft2build.h"
+#include <jni.h>
+
+#include FT_FREETYPE_H
+#include FT_TRUETYPE_TABLES_H
+
+typedef struct fontmap {
+    struct fontmap *next;
+    const char *name;
+    AAsset *asset;
+    SkTypeface *tf;
+    gr_face *grface;
+    FT_Face ftface;
+    int rtl;
+} fontmap;
 
 extern "C" {
 SkTypeface *grCreateFromName(const char name[], SkTypeface::Style style);
-bool grHB_ShapeItem_tf(HB_ShaperItem *item);
-bool grHBShape(HB_ShaperItem *item, gr_face *face, float size);
-
+gr_face *gr_face_from_tf(SkTypeface *tf, const char *name);
+int getSDKVersion(JNIEnv *env);
+bool setup_grandroid(JNIEnv* env, jobject thiz, const char *libgrload, int sdkVer);
 }
 #endif
