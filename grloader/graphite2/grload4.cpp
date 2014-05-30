@@ -146,6 +146,33 @@ void *grSetupComplexFont(void *t, int script, void *platformData)
     return platformData;
 }
 
+Elf32_Addr findcallsite(const soinfo *soTarget, const char *srcname, const char *srcfn)
+{
+    soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
+    if (!soSrc || !soTarget) return 0;
+    void *fnSrc = dlsym(soSrc, srcfn);
+    if (!fnSrc) return 0;
+    unsigned *gotaddr = got_addr(soTarget, reinterpret_cast<unsigned>(fnSrc));
+    SLOGD("Found got addr %p", gotaddr);
+    if (!gotaddr) return 0;
+    unsigned *pltaddr = plt_addr_arm(soTarget, gotaddr);
+    SLOGD("Found pltaddr %p", pltaddr);
+    if (!pltaddr) return 0;
+    Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
+    SLOGD("Found callsite %x", callsite);
+    return callsite;
+}
+
+Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards)
+{
+    SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
+    soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
+    Elf32_Addr callsite = findcallsite(soTarget, srcname, srcfn);
+    if (!callsite) return 0;
+    return scan_sof_arm(soTarget, callsite, num, backwards);
+}
+
+
 func_map harfbuzzmap[] = {
     { "HB_ShapeItem", "grHB_ShapeItem_tf", 0, 0, 0 },
     { "HB_ShapeItem", "grHB_ShapeItem_pf", "libwebcore.so", 0, 0 },
@@ -173,7 +200,7 @@ extern "C" bool setup_grload4(JNIEnv *env, jobject thiz, int sdkVer, const char 
     return false;
 }
 
-#if (GRLOAD == 4)
+#if (GRLOAD_API == 15)
 extern "C" void Java_org_sil_palaso_Graphite_loadGraphite(JNIEnv* env, jobject thiz)
 {
     int sdkVer = getSDKVersion(env);

@@ -36,6 +36,10 @@
 #include "cutils/log.h"
 //#include "linker_phdr.h"
 
+#ifdef ANDROID_ARM_LINKER
+#include "_arm.h"
+#endif
+
 //typedef void (SkDraw::*drawTextFn)(const char *, size_t, SkScalar, SkScalar, const SkPaint&) const;
 
 static pthread_mutex_t dl_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -309,19 +313,26 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
     unsigned short *ptgt = reinterpret_cast<unsigned short *>(tgtfn);
     SLOGD("Hooking %p to %p", ptgt, srcfn);
 // must use thumb code here
-    ptgt[0] = 0xF8DF;
-    ptgt[1] = 0xF000;
-    ptgt[2] = reinterpret_cast<unsigned>(srcfn) & 0xFFFF;   // little endian
-    ptgt[3] = reinterpret_cast<unsigned>(srcfn) >> 16;
+    int i = -1;
+    ptgt[++i] = 0xF8DF;   // LDR PC, [PC, #0]
+    if (reinterpret_cast<unsigned>(tgtfn) & 2)
+        ptgt[++i] = 0xF002;
+    else
+        ptgt[++i] = 0xF000;
+    ptgt[++i] = reinterpret_cast<unsigned>(srcfn) & 0xFFFF;   // little endian
+    ptgt[++i] = reinterpret_cast<unsigned>(srcfn) >> 16;
 //    ptgt[0] = 0xE51FF004;       // LDR PC, [PC, #-4]        // PC-4 = here+4 given PC = here+8
 //    ptgt[1] = reinterpret_cast<unsigned int>(srcfn) - 8;      // subtract 8 for pipeline
 #endif
     phdr_table_set_load_prot(soSrc->phdr, soSrc->phnum, bias, 0);
     pthread_mutex_unlock(&dl_lock);
+    ptgt = reinterpret_cast<unsigned short *>(reinterpret_cast<unsigned>(tgtfn) & 0xFFFFFFF0);
+    SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt, ptgt[0], ptgt[1], ptgt[2], ptgt[3], ptgt[4], ptgt[5], ptgt[6], ptgt[7]);
+    SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt+8, ptgt[8], ptgt[9], ptgt[10], ptgt[11], ptgt[12], ptgt[13], ptgt[14], ptgt[15]);
     return false;
 }
 
-unsigned *got_addr(soinfo *si, unsigned fn)
+unsigned *got_addr(const soinfo *si, unsigned fn)
 {
     unsigned *g = si->plt_got;
     int i;
@@ -333,7 +344,9 @@ unsigned *got_addr(soinfo *si, unsigned fn)
     return 0;
 }
 
-unsigned *plt_addr(soinfo *si, unsigned *gaddr)
+#ifdef ANDROID_ARM_LINKER
+
+unsigned *plt_addr_arm(const soinfo *si, unsigned *gaddr)
 {
     unsigned *plt = si->rel > si->plt_rel ? reinterpret_cast<unsigned *>(si->rel + si->rel_count)
                                           : reinterpret_cast<unsigned *>(si->plt_rel + si->plt_rel_count);    // assume this is where the plt starts
@@ -380,7 +393,7 @@ unsigned *plt_addr(soinfo *si, unsigned *gaddr)
 }
 
 #define within(test, base, range) ((test) > (base) - range && (test) < (base) + range)
-Elf32_Addr scan_call(soinfo *si, Elf32_Addr paddr)
+Elf32_Addr scan_call_arm(const soinfo *si, Elf32_Addr paddr)
 {
     unsigned short *start = reinterpret_cast<unsigned short *>(si->rel + si->rel_count + si->plt_rel_count * 2);  // Get somewhere close to the start of the code
     unsigned short *end = reinterpret_cast<unsigned short *>(si->init_array);     // waaay off the end, but hey we have to stop somewhere!
@@ -390,22 +403,9 @@ Elf32_Addr scan_call(soinfo *si, Elf32_Addr paddr)
     for (p = start; p < end; ++p)
     {
         unsigned v = (p[0] << 16) | p[1];
-        if ((v & 0xFC00D001) == 0xF400C000)     // calls to the plt are always -ve offsets, so s always set
+        if ((v & 0xFC00D001) == 0xF400C000)     // calls to the plt are always -ve offsets
         {
-            int s = v & 0x04000000;     // could simplify this code assuming s is set
-            int l = ((v & 0x7FF) << 1) | ((v & 0x03FF0000) >> 4);
-#if defined(NO_BRANCH)
-            l = l       | ((~(((s >> 15) | (s >> 13)) ^ v) * 0xC00) & 0x00C00000)   // handle i1, i2
-                        | ((s >> 2) * 0xFF);                                        // handle sign extending
-#else
-            if (s)
-                l = l | (((v & 0x2800) * 0xC00) & 0x00C00000) | 0xFF000000;
-            else
-                l = l | (~((v & 0x2800) * 0xC00) & 0x00C00000);
-#endif
-            unsigned res = (reinterpret_cast<unsigned>(p) + 4 + l) & 0xFFFFFFFC;
-            if (v == 0xF77CEB60 || within(res, paddr, 20))
-                SLOGD("Scanning for %x. Trying %x at %x, with offset %x from %x", paddr, res, p, l, v);
+            unsigned res = get_calladdr_arm(p);
             if (res == paddr)
                 return reinterpret_cast<unsigned>(p);
         }
@@ -414,7 +414,7 @@ Elf32_Addr scan_call(soinfo *si, Elf32_Addr paddr)
     return 0;
 }
 
-Elf32_Addr scan_sof(soinfo *si, Elf32_Addr paddr, int num, int backwards)
+Elf32_Addr scan_sof_arm(const soinfo *si, Elf32_Addr paddr, int num, int backwards)
 {
     unsigned short *end = backwards ? reinterpret_cast<unsigned short *>(si->rel + si->rel_count + si->plt_rel_count) 
                                     : reinterpret_cast<unsigned short *>(si->init_array);
@@ -433,24 +433,5 @@ Elf32_Addr scan_sof(soinfo *si, Elf32_Addr paddr, int num, int backwards)
     return 0;
 }
 
-Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards)
-{
-    SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
-    soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
-    soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
-    if (!soSrc || !soTarget) return 0;
-    void *fnSrc = dlsym(soSrc, srcfn);
-    if (!fnSrc) return 0;
-    SLOGD("%s base %x and %s base %x", targetname, soTarget->base, srcname, soSrc->base);
-    unsigned *gotaddr = got_addr(soTarget, reinterpret_cast<unsigned>(fnSrc));
-    SLOGD("Found got addr %p", gotaddr);
-    if (!gotaddr) return 0;
-    unsigned *pltaddr = plt_addr(soTarget, gotaddr);
-    SLOGD("Found pltaddr %p", pltaddr);
-    if (!pltaddr) return 0;
-    Elf32_Addr callsite = scan_call(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
-    SLOGD("Found callsite %x", callsite);
-    if (!callsite) return 0;
-    return scan_sof(soTarget, callsite, num, backwards);
-}
+#endif
 

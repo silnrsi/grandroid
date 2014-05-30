@@ -52,7 +52,9 @@ static SkTypeface *tf_from_name(const char *name)
 
 extern "C" SkTypeface *grCreateFromName(const char name[], SkTypeface::Style style)
 {
-    SkTypeface *res = tf_from_name(name);
+    SkTypeface *res = NULL;
+    if (name)
+        res = tf_from_name(name);
     SLOGD("Created %s from name as %p", name, res);
     if (!res)
         res = SkTypeface::CreateFromName(name, style);

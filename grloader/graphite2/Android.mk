@@ -36,17 +36,17 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/harfbuzz/contrib \
         ${SRC}/harfbuzz/src \
         ${SRC}/freetype/include
-LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD=4
+LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=15
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
 LOCAL_SHARED_LIBRARIES := libgraphite2
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs
 # the following are needed to support the jni function in grandroid.cpp
-LOCAL_LDFLAGS += -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils
+LOCAL_LDFLAGS += -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
 include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := libgrload5
+LOCAL_MODULE := libgrload43
 LOCAL_SRC_FILES := ${BASE_PATH}/grload5.cpp ${BASE_PATH}/grload4.cpp ${BASE_PATH}/grandroid.cpp ${BASE_PATH}/load.cpp
 LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/stlport/stlport \
@@ -60,11 +60,33 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/harfbuzz/contrib \
         ${SRC}/harfbuzz/src \
         ${SRC}/freetype/include
-LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD=5
+LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=18
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
 LOCAL_SHARED_LIBRARIES := libgraphite2
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs
 # the following are needed to support the jni function in grandroid.cpp
-LOCAL_LDFLAGS += -lharfbuzz_ng -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils
+LOCAL_LDFLAGS += -lharfbuzz_ng -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libgrload5
+LOCAL_SRC_FILES := ${BASE_PATH}/grload5.cpp ${BASE_PATH}/grandroid.cpp ${BASE_PATH}/load.cpp
+LOCAL_C_INCLUDES := ${GRHOME}/include \
+        ${SRC}/stlport/stlport \
+        ${SRC}/bionic \
+        ${SRC}/skia/include/core \
+        ${SRC}/frameworks/base/include \
+        ${SRC}/system/core/include \
+        ${SRC} \
+        ${SRC}/skia/include/core \
+        ${SRC}/harfbuzz_ng/src \
+        ${SRC}/freetype/include
+LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=19
+LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
+LOCAL_SHARED_LIBRARIES := libgraphite2
+LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs
+# the following are needed to support the jni function in grandroid.cpp
+LOCAL_LDFLAGS += -lharfbuzz_ng -lskia -lcutils -landroid -landroid_runtime -lutils -lft2
 include $(BUILD_SHARED_LIBRARY)
 

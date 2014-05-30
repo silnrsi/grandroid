@@ -32,6 +32,7 @@
 #include "SkPaint.h"
 #include "FontPlatformData.h"
 #include "cutils/log.h"
+#include "_arm.h"
 #include "hb.h"
 #include "hb-ot.h"
 #include "hb-font-private.hh"
@@ -59,6 +60,7 @@ static void grensure(size_t num)
 
 extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feature_t *features, unsigned int num_features)
 {
+    //SLOGD("grhbng_shape(font=%p, buffer=%p. face=%p, user_data=%p", font, buffer, font->face, font->face->user_data);
     gr_face *grface = gr_face_from_tf((SkTypeface *)(font->face->user_data), NULL);
     if (!grface)
         return hb_shape(font, buffer, features, num_features);
@@ -182,11 +184,56 @@ extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feat
     gr_seg_destroy (seg);
 }
 
+#if (GRLOAD_API > 18)
+unsigned short *find4calls(unsigned short *curr)
+{
+    int count = 0;
+    unsigned short *res = NULL;
+    while (!ARM_INSTR_IS_RETURN(curr))
+    {
+        if (ARM_INSTR_IS_CALL(curr))
+        {
+            ++count;
+            if (count == 1)
+                res = curr;
+            else if (count > 3)
+                return res;
+        }
+        else if (arm_instr_is_jump(curr))
+        {
+            count = 0;
+            res = NULL;
+        }
+        curr = ARM_INSTR_NEXT(curr);
+    }
+    return NULL;
+}
+
+Elf32_Addr findsymbol(const char *targetname, Elf32_Addr srcfn)
+{
+    soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
+    unsigned *gotaddr = got_addr(soTarget, srcfn);
+    SLOGD("Found got addr %p", gotaddr);
+    if (!gotaddr) return 0;
+    unsigned *pltaddr = plt_addr_arm(soTarget, gotaddr);
+    SLOGD("Found pltaddr %p", pltaddr);
+    if (!pltaddr) return 0;
+    Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
+    SLOGD("Found callsite %x", callsite);
+    unsigned short *callloc = find4calls(reinterpret_cast<unsigned short *>(callsite));
+    SLOGD("Found caller at %p", callloc);
+    return get_calladdr_arm(callloc);
+}   
+#endif
+
 func_map harfbuzzngmap[] = {
     { "hb_shape", "grhbng_shape", 0, 0, 0 },
 };
 
+#if (GRLOAD_API == 18)
 extern "C" bool setup_grload4(JNIEnv *env, jobject thiz, int sdkVer, const char *libgrload);
+#endif
+
 extern "C" bool setup_grload5(JNIEnv *env, jobject thiz, int sdkVer, const char *libgrload)
 {
     if (load_fns(libgrload, "libharfbuzz_ng.so", harfbuzzngmap, 1, sdkVer))
@@ -199,9 +246,47 @@ extern "C" void Java_org_sil_palaso_Graphite_loadGraphite(JNIEnv* env, jobject t
     const char *libgrload = "libgrload5.so";
 
     if (setup_grandroid(env, thiz, libgrload, sdkVer)) return;
-    if (sdkVer < 19)
-        if (setup_grload4(env, thiz, sdkVer, libgrload)) return;
+#if (GRLOAD_API == 18)
+    if (setup_grload4(env, thiz, sdkVer, libgrload)) return;
+#endif
     if (setup_grload5(env, thiz, sdkVer, libgrload)) return;
+
+#if (GRLOAD_API > 18)
+    Elf32_Addr hbshape_addr;
+    Elf32_Addr lowerfn;
+    soinfo *iculib = (soinfo *)dlopen("libicuuc.so", 0);
+    if (!iculib)
+    {
+        SLOGD("Can't load libicuuc.so");
+        return;
+    }
+    char name[] = "u_islower_xx";
+    for (int i = 50; i < 54; ++i)
+    {
+        sprintf(name+10, "%d", i);
+        lowerfn = reinterpret_cast<Elf32_Addr>(dlsym(iculib, name));
+        if (lowerfn)
+            break;
+    }
+    if (!lowerfn)
+    {
+        SLOGD("Can't find %s in libicuuc.so", name);
+        return;
+    }
+    hbshape_addr = findsymbol("libwebviewchromium.so", lowerfn);
+    if (!hbshape_addr)
+    {
+        SLOGD("Can't find hb_shape in libwebviewchromium.so");
+        return;
+    }
+    else
+        SLOGD("I think hb_shape is at %x", hbshape_addr);
+    if (hook_code("libwebviewchromium.so", reinterpret_cast<void *>(grhbng_shape), reinterpret_cast<void *>(hbshape_addr), sdkVer))
+    {
+        SLOGD("Hooking hb_shape to grhbng_shape in libwebviewchromium.so failed");
+        return;
+    }
+#endif
 
     // cleanup
     SLOGD("Returning from graphite load");

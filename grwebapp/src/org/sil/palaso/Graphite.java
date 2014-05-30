@@ -36,6 +36,8 @@ public class Graphite {
         System.loadLibrary("graphite2");
         if (android.os.Build.VERSION.SDK_INT < 18)
             System.loadLibrary("grload4");
+        else if (android.os.Build.VERSION.SDK_INT < 19)
+            System.loadLibrary("grload43");
         else
             System.loadLibrary("grload5");
     }
