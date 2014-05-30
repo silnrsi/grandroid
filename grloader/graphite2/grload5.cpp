@@ -243,7 +243,11 @@ extern "C" bool setup_grload5(JNIEnv *env, jobject thiz, int sdkVer, const char 
 extern "C" void Java_org_sil_palaso_Graphite_loadGraphite(JNIEnv* env, jobject thiz)
 {
     int sdkVer = getSDKVersion(env);
+#if (GRLOAD_API == 18)
+    const char *libgrload = "libgrload43.so";
+#else
     const char *libgrload = "libgrload5.so";
+#endif
 
     if (setup_grandroid(env, thiz, libgrload, sdkVer)) return;
 #if (GRLOAD_API == 18)
