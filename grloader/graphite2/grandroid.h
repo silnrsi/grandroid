@@ -42,13 +42,14 @@ typedef struct fontmap {
     AAsset *asset;
     SkTypeface *tf;
     gr_face *grface;
+    gr_feature_val *grfeats;
     FT_Face ftface;
     int rtl;
 } fontmap;
 
 extern "C" {
 SkTypeface *grCreateFromName(const char name[], SkTypeface::Style style);
-gr_face *gr_face_from_tf(SkTypeface *tf, const char *name);
+fontmap *fm_from_tf(SkTypeface *tf);
 int getSDKVersion(JNIEnv *env);
 bool setup_grandroid(JNIEnv* env, jobject thiz, const char *libgrload, int sdkVer);
 }

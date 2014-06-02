@@ -61,9 +61,10 @@ static void grensure(size_t num)
 extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feature_t *features, unsigned int num_features)
 {
     //SLOGD("grhbng_shape(font=%p, buffer=%p. face=%p, user_data=%p", font, buffer, font->face, font->face->user_data);
-    gr_face *grface = gr_face_from_tf((SkTypeface *)(font->face->user_data), NULL);
-    if (!grface)
+    fontmap *f = fm_from_tf((SkTypeface *)(font->face->user_data));
+    if (!f || !f->grface)
         return hb_shape(font, buffer, features, num_features);
+    gr_face *grface = f->grface;
     gr_font *grfont = gr_make_font(font->x_scale, grface);
     
     gr_segment *seg = NULL;
@@ -90,7 +91,7 @@ extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feat
 
     seg = gr_make_seg (grfont, grface,
 		     script_tag[1] == HB_TAG_NONE ? script_tag[0] : script_tag[1],
-		     NULL,
+		     f->grfeats,
 		     gr_utf32, chars, buffer->len,
 		     2 | (hb_buffer_get_direction (buffer) == HB_DIRECTION_RTL ? 1 : 0));
 

@@ -34,6 +34,7 @@
 #include <android/asset_manager_jni.h>
 #include "cutils/log.h"
 #include "_linker.h"
+#include <ctype.h>
 
 class FontPlatformData;
 
@@ -63,24 +64,15 @@ extern "C" SkTypeface *grCreateFromName(const char name[], SkTypeface::Style sty
     return res;
 }
 
-gr_face *gr_face_from_tf(SkTypeface *tf, const char *name)
+fontmap *fm_from_tf(SkTypeface *tf)
 {
     fontmap *f;
     for (f = myfonts; f; f = f->next)
     {
         if (f->tf == tf)
-            return f->grface;
+            return f;
     }
     return NULL;
-/*
-    f = new fontmap;
-    f->next = myfonts;
-    f->tf = tf;
-    f->grface = NULL;
-    f->name = name;
-    myfonts = f;
-    return f->grface;
-*/
 }
 
 static void const *fr_gettable(const void *dat, unsigned int tag, size_t *len)
@@ -105,7 +97,126 @@ void fr_freetable(const void *dat, void const *buff)
 static gr_face_ops ops = {sizeof(gr_face_ops), fr_gettable, fr_freetable};
 static FT_Library gFTLibrary = NULL;
 
-extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jobject thiz, jobject jassetMgr, jstring jpath, jstring jname, jint rtl )
+#define HB_TAG(c1,c2,c3,c4) ((unsigned int)((((uint8_t)(c1))<<24)|(((uint8_t)(c2))<<16)|(((uint8_t)(c3))<<8)|((uint8_t)(c4))))
+
+inline unsigned int gettag(const char *s)
+{ return HB_TAG(s[0], s[1], s[2], s[3]); }
+
+static unsigned int jgettag(JNIEnv *env, jstring jtag)
+{
+    const char *tagstr = env->GetStringUTFChars(jtag, NULL);
+    unsigned int res = gettag(tagstr);
+    env->ReleaseStringUTFChars(jtag, tagstr);
+    return res;
+}
+
+static unsigned int parse_tag(const char * &start, const char *send, int &def)
+{
+    unsigned int res = 0;
+    const char *s;
+    def = 1;
+    while (start < send)
+    {
+        if (*start == '+')
+        {
+            ++start;
+            break;
+        }
+        else if (isalnum(*start))
+            break;
+        else if (*start == '-')
+        {
+            def = 0;
+            ++start;
+            break;
+        }
+        ++start;
+    }
+    if (start >= send)
+        return 0;
+
+    bool isnum = true;
+    for (s = start; s < send; ++s)
+    {
+        if (isalpha(*s))
+            isnum = false;
+        else if (!isdigit(*s))
+            break;
+    }
+    if (s == start)
+        return 0;
+
+    if (isnum)
+    {
+        res = strtoul(s, const_cast<char **>(&start), 10);
+    }
+    else
+    {
+        int i;
+        for (i = 0; i < 4 && start < s; ++start, ++i)
+            res = (res << 8) | *start;
+        res = res << ((4 - i) * 8);
+        start = s;
+    }
+    return res;
+}
+
+static int parse_val(const char * &start, const char *send, int &def)
+{
+    int res = def;
+    bool isneg = false;
+    const char *s;
+    while (start < send)
+    {
+        if (isdigit(*start))
+        {
+            s = start;
+            break;
+        }
+        else if (*start == '+' || *start == '-')
+        {
+            s = start;
+            ++start;
+            break;
+        }
+        ++start;
+    }
+    if (start >= send)
+        return 0;
+    if (!isdigit(*start))   // don't consume a following +tag
+    {
+        --start;
+        return 0;
+    }
+    res = strtol(s, const_cast<char **>(&start), 10);
+    return res;
+}
+
+static void parse_features(gr_face *face, gr_feature_val *feats, JNIEnv *env, jstring jfeats)
+{
+    const char *featstr = env->GetStringUTFChars(jfeats, NULL);
+    int len = env->GetStringUTFLength(jfeats);
+    unsigned int tag;
+    int val;
+    const char *s = featstr;
+    const char *send = featstr + len;
+    while (s < send)
+    {
+        tag = parse_tag(s, send, val);
+        if (tag)
+        {
+            const gr_feature_ref *fref;
+            val = parse_val(s, send, val);
+            fref = gr_face_find_fref(face, tag);
+            if (fref)
+                gr_fref_set_feature_value(fref, val, feats);
+        }
+    }
+    env->ReleaseStringUTFChars(jfeats, featstr);
+}
+        
+
+extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jobject thiz, jobject jassetMgr, jstring jpath, jstring jname, jint rtl, jstring lang, jstring feats )
 {
     AAssetManager *mgr = AAssetManager_fromJava(env, jassetMgr);
     if (mgr == NULL) return 0;
@@ -136,7 +247,7 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
     f->next = myfonts;
     f->tf = tf;
     f->asset = asset;
-    f->name = rtl ? "" : name;
+    f->name = name;
     f->rtl = rtl ? 7 : 0;
     if (!gFTLibrary && FT_Init_FreeType(&gFTLibrary))
     {
@@ -162,7 +273,18 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
     f->ftface = face;
     // can't free the face since it's owned by grface now, and face needs asset
     if (!f->grface) SLOGD("Failed to create graphite font");
+
+    // Now handle lang and feats
+    if (env->GetStringLength(lang))
+        f->grfeats = gr_face_featureval_for_lang(f->grface, jgettag(env, lang));
+    else
+        f->grfeats = gr_face_featureval_for_lang(f->grface, 0);
+
+    if (env->GetStringLength(feats))
+        parse_features(f->grface, f->grfeats, env, feats);
+    
     myfonts = f;
+#if 0
     if (rtl)
     {
         SkTypeface *tfw = SkTypeface::CreateFromStream(aStream);
@@ -179,6 +301,7 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
             myfonts = fw;
         }
     }
+#endif
 //    return (int)(void *)(f->tf);
     return res;
 }

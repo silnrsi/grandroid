@@ -30,7 +30,7 @@ package org.sil.palaso;
 public class Graphite {
 
     public static native void loadGraphite();
-    public static native Object addFontResource(Object assets, String asset_name, String font_name, int rtl);
+    public static native Object addFontResource(Object assets, String asset_name, String font_name, int rtl, String lang, String feats);
 
     static {
         System.loadLibrary("graphite2");

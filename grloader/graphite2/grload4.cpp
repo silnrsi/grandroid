@@ -68,12 +68,12 @@ static gr_uint32 script_tags[] = {
         0                               /* HB_Script_Inherited */
 };
 
-bool grHBShape(HB_ShaperItem *item, gr_face *face, float size, bool isTextView)
+bool grHBShape(HB_ShaperItem *item, gr_face *face, float size, bool isTextView, gr_feature_val *feats)
 {
     int isrtl = item->item.bidiLevel & 1;
     gr_font *font = gr_make_font(size * 64, face);
     gr_segment *seg = gr_make_seg(font, face,
-            item->item.script < HB_Script_Inherited ? script_tags[item->item.script] : 0, NULL,
+            item->item.script < HB_Script_Inherited ? script_tags[item->item.script] : 0, feats,
             gr_utf16, item->string + item->item.pos, item->item.length, isrtl ? 7 : 0);
 	if (gr_seg_n_slots(seg) >= item->num_glyphs)
 	{
@@ -124,10 +124,10 @@ extern "C" bool grHB_ShapeItem_tf(HB_ShaperItem *item)
 {
     SkPaint *paint = (SkPaint *)(item->font->userData);
     SkTypeface *tf = paint->getTypeface();
-    gr_face *face = gr_face_from_tf(tf, NULL);
+    fontmap *f = fm_from_tf(tf);
     //SLOGD("grHB_ShapeItem_tf(%p->%p)", tf, face);
-    if (!face) return HB_ShapeItem(item);
-    else return grHBShape(item, face, paint->getTextSize(), 1);
+    if (!f || !f->grface) return HB_ShapeItem(item);
+    else return grHBShape(item, f->grface, paint->getTextSize(), 1, f->grfeats);
 }
 
 extern "C" bool grHB_ShapeItem_pf(HB_ShaperItem *item)
@@ -135,9 +135,9 @@ extern "C" bool grHB_ShapeItem_pf(HB_ShaperItem *item)
     //SLOGD("grHB_ShapeItem_pf");
     FontPlatformData *pf = (FontPlatformData *)(item->font->userData);
     SkTypeface *tf = pf->typeface();
-    gr_face *face = gr_face_from_tf(tf, NULL);
-    if (!face) return HB_ShapeItem(item);
-    else return grHBShape(item, face, (pf->size() > 0 ? pf->size() : 12), 0);
+    fontmap *f = fm_from_tf(tf);
+    if (!f || !f->grface) return HB_ShapeItem(item);
+    else return grHBShape(item, f->grface, (pf->size() > 0 ? pf->size() : 12), 0, f->grfeats);
 }
 
 void *grSetupComplexFont(void *t, int script, void *platformData)
