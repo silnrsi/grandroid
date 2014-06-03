@@ -3,7 +3,7 @@
       package="org.sil.palaso.helloworld"
       android:versionCode="1"
       android:versionName="1.0">
-    <uses-sdk android:targetSdkVersion="15" android:maxSdkVersion="19" android:minSdkVersion="15"/>
+    <uses-sdk android:targetSdkVersion="15" android:maxSdkVersion="19" android:minSdkVersion="8"/>
 
     <application android:icon="@drawable/icon" android:label="@string/app_name">
         <activity android:name="org.sil.palaso.helloworld.HelloWorld"

@@ -98,9 +98,13 @@ phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
 
 bool load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer)
 {
+    SLOGD("load_fns %s -> %s", srcname, targetname);
     soinfo *soHead = (soinfo *)dlopen("libdl.so", 0);
+    SLOGD("Found libdl.so at %p", soHead);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
+    SLOGD("Found %s at %p", targetname, soTarget);
     soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
+    SLOGD("Found %s at %p", srcname, soSrc);
     soinfo *si;
     int i, j;
 
@@ -335,6 +339,7 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
 unsigned *got_addr(const soinfo *si, unsigned fn)
 {
     unsigned *g = si->plt_got;
+    SLOGD("Searching got at %p", g);
     int i;
     for (i = 0; i < si->plt_rel_count; ++i, ++g)
     {
@@ -434,4 +439,30 @@ Elf32_Addr scan_sof_arm(const soinfo *si, Elf32_Addr paddr, int num, int backwar
 }
 
 #endif
+
+Elf32_Addr findcallsite(const soinfo *soTarget, const char *srcname, const char *srcfn)
+{
+    soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
+    if (!soSrc || !soTarget) return 0;
+    void *fnSrc = dlsym(soSrc, srcfn);
+    if (!fnSrc) return 0;
+    unsigned *gotaddr = got_addr(soTarget, reinterpret_cast<unsigned>(fnSrc));
+    SLOGD("Found got addr %p", gotaddr);
+    if (!gotaddr) return 0;
+    unsigned *pltaddr = plt_addr_arm(soTarget, gotaddr);
+    SLOGD("Found pltaddr %p", pltaddr);
+    if (!pltaddr) return 0;
+    Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
+    SLOGD("Found callsite %x", callsite);
+    return callsite;
+}
+
+Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards)
+{
+    SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
+    soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
+    Elf32_Addr callsite = findcallsite(soTarget, srcname, srcfn);
+    if (!callsite) return 0;
+    return scan_sof_arm(soTarget, callsite, num, backwards);
+}
 

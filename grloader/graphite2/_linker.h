@@ -257,4 +257,5 @@ Elf32_Addr scan_call_arm(const soinfo *si, Elf32_Addr paddr);
 Elf32_Addr scan_sof_arm(const soinfo *si, Elf32_Addr paddr, int num, int backwards);
 #endif
 
+Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards);
 #endif

@@ -335,5 +335,6 @@ func_map typefacemap[] = {
 bool setup_grandroid(JNIEnv* env, jobject thiz, const char *libgrload, int sdkVer)
 {
     if (myfonts) return true;
+    SLOGD("Setting up grandroid");
     return load_fns(libgrload, "libskia.so", typefacemap, 1, sdkVer);
 }

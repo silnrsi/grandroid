@@ -844,7 +844,11 @@ private:
     SkColor         fColor;
     SkScalar        fWidth;
     SkScalar        fMiterLimit;
+#if defined(GRLOAD_API) && (GRLOAD_API < 11)
     unsigned        fFlags : 12;
+#else
+    unsigned        fFlags : 11;
+#endif
     unsigned        fTextAlign : 2;
     unsigned        fCapType : 2;
     unsigned        fJoinType : 2;
