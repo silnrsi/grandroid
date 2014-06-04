@@ -90,7 +90,7 @@ phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
             res = -1;
             SLOGD("Failed to unprotect (%s) %x->%x [%x + %x, +%x]V%d", strerror(errno), seg_page_start, seg_page_end, phdr->p_vaddr, load_bias, phdr->p_memsz, prots);
         } else {
-//            SLOGD("Unprotected %x->%x", seg_page_start, seg_page_end);
+            SLOGD("Unprotected %x->%x", seg_page_start, seg_page_end);
         }
     }
     return res;
@@ -100,11 +100,11 @@ bool load_fns(const char *srcname, const char *targetname, func_map *map, int nu
 {
     SLOGD("load_fns %s -> %s", srcname, targetname);
     soinfo *soHead = (soinfo *)dlopen("libdl.so", 0);
-    SLOGD("Found libdl.so at %p", soHead);
+    SLOGD("Found libdl.so at %p (base = %p)", soHead->base);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
-    SLOGD("Found %s at %p", targetname, soTarget);
+    SLOGD("Found %s at %p (base = %p)", targetname, soTarget, soTarget->base);
     soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
-    SLOGD("Found %s at %p", srcname, soSrc);
+    SLOGD("Found %s at %p (base = %p)", srcname, soSrc, soSrc->base);
     soinfo *si;
     int i, j;
 
@@ -117,13 +117,13 @@ bool load_fns(const char *srcname, const char *targetname, func_map *map, int nu
         if (!map[i].ptarget)
         {
             SLOGD("Failed to find %s in %s", map[i].starget, targetname);
-            return true;
+            continue;
         }
         map[i].psrc = dlsym(soSrc, map[i].ssrc);
         if (!map[i].psrc)
         {
             SLOGD("Failed to find %s in %s", map[i].ssrc, srcname);
-            return true;
+            continue;
         }
     }
     
@@ -351,16 +351,15 @@ unsigned *got_addr(const soinfo *si, unsigned fn)
 
 #ifdef ANDROID_ARM_LINKER
 
-unsigned *plt_addr_arm(const soinfo *si, unsigned *gaddr)
+unsigned *plt_addr_arm(const soinfo *si, unsigned gaddr)
 {
     unsigned *plt = si->rel > si->plt_rel ? reinterpret_cast<unsigned *>(si->rel + si->rel_count)
                                           : reinterpret_cast<unsigned *>(si->plt_rel + si->plt_rel_count);    // assume this is where the plt starts
     unsigned *p, *pend, *pstart;
-    unsigned target = reinterpret_cast<unsigned>(gaddr);
     int i;
     pstart = 0;
     SLOGD("Searching for start of plt at %p from %p + %x", plt, si->rel, si->rel_count);
-    for (p = plt, pend = plt + 100; p < pend; ++p)  // scan to find first plt entry
+    for (p = plt, pend = plt + 2048; p < pend; ++p)  // scan to find first plt entry
     {
         if ((*p & 0xFFEFF000) == 0xE28FC000)        // search for an ADD IP, PC, #x of some kind
         {
@@ -370,7 +369,7 @@ unsigned *plt_addr_arm(const soinfo *si, unsigned *gaddr)
     }
     if (!pstart) return 0;
     pend = pstart + si->plt_rel_count * 3;
-    SLOGD("Search for %d entries up to %p", si->plt_rel_count, pend);
+    SLOGD("Search for %d entries from %p to %p", si->plt_rel_count, pstart, pend);
     for (p = pstart, i = 0; i < si->plt_rel_count; ++i, ++p)
     {
         unsigned offset = 0;
@@ -386,7 +385,7 @@ unsigned *plt_addr_arm(const soinfo *si, unsigned *gaddr)
             {
                 offset += (*p & 0xFFF);
 //                if (i < 20 || (offset < target + 100 && offset > target - 100)) SLOGD("Checking plt addr %p, jumps to %x vs %x", p, offset, target);
-                if (offset == target)
+                if (*reinterpret_cast<unsigned int *>(offset) == gaddr)
                     return res;
                 else
                     break;
@@ -446,10 +445,10 @@ Elf32_Addr findcallsite(const soinfo *soTarget, const char *srcname, const char 
     if (!soSrc || !soTarget) return 0;
     void *fnSrc = dlsym(soSrc, srcfn);
     if (!fnSrc) return 0;
-    unsigned *gotaddr = got_addr(soTarget, reinterpret_cast<unsigned>(fnSrc));
-    SLOGD("Found got addr %p", gotaddr);
-    if (!gotaddr) return 0;
-    unsigned *pltaddr = plt_addr_arm(soTarget, gotaddr);
+    //unsigned *gotaddr = got_addr(soTarget, );
+    //SLOGD("Found got addr %p", gotaddr);
+    //if (!gotaddr) return 0;
+    unsigned *pltaddr = plt_addr_arm(soTarget, reinterpret_cast<unsigned>(fnSrc));
     SLOGD("Found pltaddr %p", pltaddr);
     if (!pltaddr) return 0;
     Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
@@ -461,8 +460,10 @@ Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn
 {
     SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
+    //phdr_table_set_load_prot(soTarget->phdr, soTarget->phnum, soTarget->base, PROT_READ);
     Elf32_Addr callsite = findcallsite(soTarget, srcname, srcfn);
     if (!callsite) return 0;
-    return scan_sof_arm(soTarget, callsite, num, backwards);
+    Elf32_Addr res = scan_sof_arm(soTarget, callsite, num, backwards);
+    //phdr_table_set_load_prot(soTarget->phdr, soTarget->phnum, soTarget->base, 0);
 }
 

@@ -32,6 +32,7 @@
 #include "SkScalar.h"
 #include "SkPaint.h"
 #include "SkDraw.h"
+#include "SkDevice.h"
 #include "SkGlyphCache.h"
 #include "SkBitmapProcShader.h"
 #include "SkBlitter.h"
@@ -87,13 +88,137 @@ static void handle_aftertext(const SkDraw* draw, const SkPaint& paint,
 }
 
 // hack to deal with suprious SkToU8 in SkPaint.h. This should never get called.
-// unsigned char SkToU8(unsigned int x)
-// { return 32; }
+//unsigned char SkToU8(unsigned int x)
+//{ return 32; }
+
+// local classes
+class mySkCanvas : public SkCanvas
+{
+public:
+    explicit mySkCanvas(const SkBitmap& bitmap);
+    explicit mySkCanvas(SkDevice *device = NULL);
+    SkDevice* setDevice(SkDevice* device);
+    virtual SkDevice* setBitmapDevice(const SkBitmap& bitmap);
+    virtual SkDevice* createDevice(SkBitmap::Config config, int width, int height, bool isOpaque, bool isForLayer);
+};
+
+class newSkCanvas : public SkCanvas
+{
+public:
+	newSkCanvas(SkDevice *device = NULL) {};
+};
+
+class mySkDraw : public SkDraw
+{
+public:
+    void drawText(const char *text, size_t bytelen, SkScalar x, SkScalar y, const SkPaint& paint) const;
+};
+
+class mySkDevice : public SkDevice
+{
+public:
+//    mySkDevice() {};
+    virtual void drawText(const SkDraw& d, const void *text, size_t len, SkScalar x, SkScalar y, const SkPaint &paint);
+};
+
+class newSkDevice : public SkDevice
+{
+public:
+//    newSkDevice() {};
+};
+
+static mySkCanvas mySkCanvasDummy((SkDevice *)1);
+static newSkCanvas newSkCanvasDummy((SkDevice *)1);
+static mySkDevice mySkDeviceDummy;
+static newSkDevice newSkDeviceDummy;
+
+// functions
+void hookvtbl(void *dest, void *base, void *sub, int num)
+{
+    ptrdiff_t *d = *(ptrdiff_t **)dest;		// long
+    ptrdiff_t *b = *(ptrdiff_t **)base;		// short
+    ptrdiff_t *s = *(ptrdiff_t **)sub;		// short
+    ptrdiff_t *newv = (ptrdiff_t *)malloc(num * sizeof(ptrdiff_t));
+    int j = 2, i, k, l;
+
+    // handle destructors
+    for (i = 0; i < 2; ++i)
+    	newv[i] = d[i];
+
+    for (i = 2; i < num; ++i)
+    {
+        if (d[i] == b[j])
+        {
+            newv[i] = s[j];
+            ++j;
+        }
+        else
+        {
+            newv[i] = d[i];
+            for (k = i + 1, l = j + 1; k < num; ++k, ++l)
+            {
+                if (d[k] == b[l])
+                {
+                    newv[i] = s[j];
+                    i = k - 1;
+                    j = l;
+                    break;
+                }
+                else
+                    newv[k] = s[l];
+                if (!d[k] || !b[l]) break;
+            }
+        }
+        if (!d[i]) break;
+    }
+    *(ptrdiff_t **)dest = newv;
+}
+
+mySkCanvas::mySkCanvas(const SkBitmap& bitmap) :
+    SkCanvas(bitmap)
+{
+    hookvtbl(this, &newSkCanvasDummy, &mySkCanvasDummy, 62);    // 38 + 1 rtti? + 2 destructor + spare
+    setDevice(getDevice());
+}
+
+mySkCanvas::mySkCanvas(SkDevice *device) :
+    SkCanvas(device == (SkDevice *)1 ? NULL : device)
+{
+    if (device != (SkDevice *)1)
+        hookvtbl(this, &newSkCanvasDummy, &mySkCanvasDummy, 62);
+    else
+        device = NULL;
+    setDevice(device);
+}
+
+SkDevice* mySkCanvas::setBitmapDevice(const SkBitmap& bitmap)
+{
+    return setDevice(SkCanvas::setBitmapDevice(bitmap));
+}
+
+void mySkDevice::drawText(const SkDraw& d, const void *text, size_t len, SkScalar x, SkScalar y, const SkPaint &paint)
+{
+    ((mySkDraw *)(&d))->drawText((const char *)text, len, x, y, paint);
+}
+
+SkDevice *mySkCanvas::setDevice(SkDevice* device)
+{
+    if (device)
+        hookvtbl(device, &newSkDeviceDummy, &mySkDeviceDummy, 41);    // 17 + spares
+    return SkCanvas::setDevice(device);
+}
+
+SkDevice* mySkCanvas::createDevice(SkBitmap::Config config, int width, int height, bool isOpaque, bool isForLayer)
+{
+    SkDevice *res = SkCanvas::createDevice(config, width, height, isOpaque, isForLayer);
+    hookvtbl(res, &newSkDeviceDummy, &mySkDeviceDummy, 41);    // 17 + spares
+    return res;
+}
 
 const char *preproctext(const char *text, size_t bytelen, gr_encform enctype, int rtl)
 {
     const char *ptext = text;
-    if (rtl == 3)
+    if (rtl == 7)
     {
         ptext = (const char *)malloc(bytelen);
         if (!ptext) ptext = text;
@@ -107,25 +232,24 @@ const char *preproctext(const char *text, size_t bytelen, gr_encform enctype, in
 }
 
 // mangled name: _ZNK8mySkDraw8drawTextEPKcjffRK7SkPaint 
-extern "C" void grDrawText(SkDraw *t, const char *text, size_t bytelen, SkScalar x, SkScalar y, const SkPaint& paint)
+void mySkDraw::drawText(const char *text, size_t bytelen, SkScalar x, SkScalar y, const SkPaint& paint) const
 {
-    int rtl = 0;
     fontmap *f = fm_from_tf(paint.getTypeface());
     gr_encform enctype = gr_encform(paint.getTextEncoding() + 1);
-    if ((t->fMatrix->getType() & SkMatrix::kPerspective_Mask) || enctype > 2 || !f || !f->grface)
+    if ((fMatrix->getType() & SkMatrix::kPerspective_Mask) || enctype > 2 || !f || !f->grface)
     {
-        t->drawText(text, bytelen, x, y, paint);
+        SkDraw::drawText(text, bytelen, x, y, paint);
         return;
     }
 
-    if (text == NULL || bytelen == 0 || t->fClip->isEmpty() ||
+    if (text == NULL || bytelen == 0 || fClip->isEmpty() ||
             (paint.getAlpha() == 0 && paint.getXfermode() == NULL))
         return;
 
     gr_font *font = gr_make_font(paint.getTextSize(), f->grface); // textsize in pixels
     if (!font) return;
 
-    const char *ptext = preproctext(text, bytelen, enctype, rtl);
+    const char *ptext = preproctext(text, bytelen, enctype, f->rtl);
     size_t numchar = gr_count_unicode_characters(enctype, ptext, ptext + bytelen, NULL);
     gr_segment *seg = gr_make_seg(font, f->grface, 0, f->grfeats, enctype, ptext, numchar, f->rtl);
     if (!seg)
@@ -138,7 +262,7 @@ extern "C" void grDrawText(SkDraw *t, const char *text, size_t bytelen, SkScalar
     SkPoint  underlineStart;
     SkPoint  segWidth;
 
-    t->fMatrix->mapXY(gr_seg_advance_X(seg), gr_seg_advance_Y(seg), &segWidth);
+    fMatrix->mapXY(gr_seg_advance_X(seg), gr_seg_advance_Y(seg), &segWidth);
     underlineStart.set(0, 0);
     if (paint.getFlags() & (SkPaint::kUnderlineText_Flag | SkPaint::kStrikeThruText_Flag))
     {
@@ -151,10 +275,10 @@ extern "C" void grDrawText(SkDraw *t, const char *text, size_t bytelen, SkScalar
         underlineStart.set(x - offsetX, y);
     }
 
-    SkAutoGlyphCache    autoCache(paint, t->fMatrix);
+    SkAutoGlyphCache    autoCache(paint, fMatrix);
     SkGlyphCache*       cache = autoCache.getCache();
     unsigned int bitmapstore[sizeof(SkBitmapProcShader) >> 2];
-    SkBlitter*  blitter = SkBlitter::Choose(*t->fBitmap, *t->fMatrix, paint,
+    SkBlitter*  blitter = SkBlitter::Choose(*fBitmap, *fMatrix, paint,
                                 bitmapstore, sizeof(bitmapstore));
 
     if (paint.getTextAlign() == SkPaint::kRight_Align)
@@ -169,12 +293,12 @@ extern "C" void grDrawText(SkDraw *t, const char *text, size_t bytelen, SkScalar
     }
 
     SkDraw1Glyph        dlg;
-    SkDraw1Glyph::Proc  proc = dlg.init(t, blitter, cache);
+    SkDraw1Glyph::Proc  proc = dlg.init(this, blitter, cache);
     const gr_slot *s;
     for (s = gr_seg_first_slot(seg); s; s = gr_slot_next_in_segment(s))
     {
         SkPoint pos;
-        t->fMatrix->mapXY(gr_slot_origin_X(s) + x, -gr_slot_origin_Y(s) + y, &pos);
+        fMatrix->mapXY(gr_slot_origin_X(s) + x, -gr_slot_origin_Y(s) + y, &pos);
         const SkGlyph& glyph = cache->getGlyphIDMetrics(gr_slot_gid(s));
         if (glyph.fWidth)
             proc(dlg, glyph, SkFixedFloor(SkScalarToFixed(pos.fX)), SkFixedFloor(SkScalarToFixed(pos.fY)));
@@ -183,21 +307,35 @@ extern "C" void grDrawText(SkDraw *t, const char *text, size_t bytelen, SkScalar
     if (underlineWidth)
     {
         autoCache.release();
-        handle_aftertext(t, paint, underlineWidth, underlineStart);
+        handle_aftertext(this, paint, underlineWidth, underlineStart);
     }
     gr_seg_destroy(seg);
     gr_font_destroy(font);
 }
 
-extern "C" SkScalar grMeasureText(SkPaint *t, const void* textData, size_t length, SkRect *bounds, SkScalar zoom)
+class mySkPaint : public SkPaint
 {
-    int rtl = 0;
+public:
+    SkScalar    measureText(const void* text, size_t length,
+                            SkRect* bounds, SkScalar scale = 0) const;
+    SkScalar    measureText(const void* text, size_t length) const;
+    int         getTextWidths(const void* text, size_t byteLength, SkScalar widths[],
+                            SkRect bounds[] = NULL) const;
+};
+
+SkScalar mySkPaint::measureText(const void *text, size_t length) const
+{
+    return mySkPaint::measureText(text, length, NULL, 0);
+}
+
+SkScalar mySkPaint::measureText(const void* textData, size_t length, SkRect *bounds, SkScalar zoom) const
+{
     const char* text = (const char *)textData;
-    fontmap *f = fm_from_tf(t->getTypeface());
-    gr_encform enctype = gr_encform(t->getTextEncoding() + 1);
+    fontmap *f = fm_from_tf(getTypeface());
+    gr_encform enctype = gr_encform(getTextEncoding() + 1);
     if (enctype > 2 || !f || !f->grface)
-        return t->measureText(textData, length, bounds, zoom);
-    gr_font *font = gr_make_font(zoom ? SkScalarMul(t->getTextSize(), zoom) : t->getTextSize(), f->grface);
+        return SkPaint::measureText(text, length, bounds, zoom);
+    gr_font *font = gr_make_font(zoom ? SkScalarMul(getTextSize(), zoom) : getTextSize(), f->grface);
     if (!font) return 0;
 
 //    const char *ptext = preproctext(text, length, enctype, rtl);
@@ -221,15 +359,14 @@ extern "C" SkScalar grMeasureText(SkPaint *t, const void* textData, size_t lengt
     return width;
 }
 
-extern "C" int grGetTextWidths(SkPaint *t, const void* textData, size_t byteLength, SkScalar widths[], SkRect bounds[])
+int mySkPaint::getTextWidths(const void* textData, size_t byteLength, SkScalar widths[], SkRect bounds[]) const
 {
-    int rtl = 0;
     const char* text = (const char *)textData;
-    fontmap *f = fm_from_tf(t->getTypeface());
-    gr_encform enctype = gr_encform(t->getTextEncoding() + 1);
+    fontmap *f = fm_from_tf(getTypeface());
+    gr_encform enctype = gr_encform(getTextEncoding() + 1);
     if (enctype > 2 || !f || !f->grface)
-        return t->getTextWidths(textData, byteLength, widths, bounds);
-    gr_font *font = gr_make_font(t->getTextSize(), f->grface);
+        return SkPaint::getTextWidths(textData, byteLength, widths, bounds);
+    gr_font *font = gr_make_font(getTextSize(), f->grface);
     if (!font) return 0;
 
 //    const char *ptext = preproctext(text, byteLength, enctype, rtl);
@@ -241,7 +378,7 @@ extern "C" int grGetTextWidths(SkPaint *t, const void* textData, size_t byteLeng
         return 0;
     }
     float width = 0;
-    if (rtl) width = gr_seg_advance_X(seg);
+    if (f->rtl) width = gr_seg_advance_X(seg);
     for (int i = 0; i < numchar; ++i)
     {
         const gr_char_info *c = gr_seg_cinfo(seg, i);
@@ -262,16 +399,16 @@ extern "C" int grGetTextWidths(SkPaint *t, const void* textData, size_t byteLeng
                 if (as) break;
             }
         }
-        *widths = (rtl ? -1 : 1) * ((as ? gr_slot_origin_X(as) : (rtl ? 0 : gr_seg_advance_X(seg))) - width);
+        *widths = (f->rtl ? -1 : 1) * ((as ? gr_slot_origin_X(as) : (f->rtl ? 0 : gr_seg_advance_X(seg))) - width);
         if (bounds)
         {
-            bounds->fLeft = rtl ? *widths + width : width;
-            bounds->fRight = rtl ? width : *widths + width;
+            bounds->fLeft = f->rtl ? *widths + width : width;
+            bounds->fRight = f->rtl ? width : *widths + width;
             bounds->fBottom = 0;
             bounds->fTop = 0;
             ++bounds;
         }
-        if (rtl)
+        if (f->rtl)
             width -= *widths;
         else
             width += *widths;
@@ -280,46 +417,52 @@ extern "C" int grGetTextWidths(SkPaint *t, const void* textData, size_t byteLeng
     return numchar;
 }
 
-func_map skiamap[] = {
-    // SkDraw::DrawText,                            mySkDraw::DrawText
-    { "_ZNK6SkDraw8drawTextEPKcjffRK7SkPaint",      "grDrawText", 0, 0, reinterpret_cast<void *>(grDrawText) },
-    // SkPaint::measureText                         mySkPaint::measureText
-    { "_ZNK7SkPaint11measureTextEPKvjP6SkRectf",    "grMeasureText", 0, 0, reinterpret_cast<void *>(grMeasureText) },
-    // SkPaint::getTextWidths                       mySkPaint::getTextWidths
-    { "_ZNK7SkPaint13getTextWidthsEPKvjPfP6SkRect", "grGetTextWidths", 0, 0, reinterpret_cast<void *>(grGetTextWidths) },
-    { 0, 0, 0, 0, 0 }
+class mySkTypeface : public SkTypeface
+{
+public:
+    static SkTypeface *CreateFromName(const char name[], SkTypeface::Style style);
 };
 
-extern "C" bool setup_grload2(JNIEnv *env, jobject thiz, int sdkVer, const char *libgrload)
+SkTypeface *mySkTypeface::CreateFromName(const char name[], SkTypeface::Style style)
 {
-    if (load_fns(libgrload, "libskia.so", skiamap, 3, sdkVer))
-        return true;
-
-    func_map *fn;
-    for (fn = skiamap; fn->starget != NULL; ++fn)
-    {
-        Elf32_Addr aRef = findfn("libskia.so", "libskia.so", fn->starget, 1, 1);
-        if (!aRef || hook_code("libskia.so", fn->psrc, reinterpret_cast<void *>(aRef), sdkVer))
-        {
-            SLOGD("Hooking %s->%s failed", fn->starget, fn->ssrc);
-            return true;
-        }
-    }
-    return false;
+    SkTypeface *res = tf_from_name(name);
+    if (res)
+        return res;
+    else
+        return SkTypeface::CreateFromName(name, style);
 }
 
-#if (GRLOAD_API == 10)
+func_map thismap[] = {
+    // SkDraw::DrawText,                            mySkDraw::DrawText
+    { "_ZNK6SkDraw8drawTextEPKcjffRK7SkPaint",      "_ZNK8mySkDraw8drawTextEPKcjffRK7SkPaint", 0, 0 },
+    // SkCanvas::SkCanvas(SkBitmap&),               mySkCanvas::mySkCanvas(SkBitmap&)
+    { "_ZN8SkCanvasC1ERK8SkBitmap",                 "_ZN10mySkCanvasC1ERK8SkBitmap", 0, 0 },
+    { "_ZN8SkCanvasC2ERK8SkBitmap",                 "_ZN10mySkCanvasC2ERK8SkBitmap", 0, 0 },
+    // SkCanvas::SkCanvas(SkDevice*),               mySkCanvas::mySkCanvas(SkDevice*)
+    { "_ZN8SkCanvasC1EP8SkDevice",                  "_ZN10mySkCanvasC1EP8SkDevice", 0, 0 },
+    { "_ZN8SkCanvasC2EP8SkDevice",                  "_ZN10mySkCanvasC2EP8SkDevice", 0, 0 },
+    // SkCanvas::setBitmapDevice,                   mySkCanvas::setBitmapDevice
+    { "_ZN8SkCanvas15setBitmapDeviceERK8SkBitmap",  "_ZN10mySkCanvas15setBitmapDeviceERK8SkBitmap", 0, 0 },
+    // SkCanvas::setDevice,                         mySkCanvas::setDevice
+    { "_ZN8SkCanvas9setDeviceEP8SkDevice",          "_ZN10mySkCanvas9setDeviceEP8SkDevice", 0, 0 },
+    // SkDevice::drawText                                mySkDraw::drawText
+    { "_ZN8SkDevice8drawTextERK6SkDrawPKvjffRK7SkPaint", "_ZN10mySkDevice8drawTextERK6SkDrawPKvjffRK7SkPaint", 0, 0 },
+    // SkTypeface::CreateFromName                        mySkTypeface::CreateFromName
+    { "_ZN10SkTypeface14CreateFromNameEPKcNS_5StyleE",   "_ZN12mySkTypeface14CreateFromNameEPKcN10SkTypeface5StyleE", 0, 0 },
+    // SkPaint::measureText                         mySkPaint::measureText
+    { "_ZNK7SkPaint11measureTextEPKvjP6SkRectf",    "_ZNK9mySkPaint11measureTextEPKvjP6SkRectf", 0, 0 },
+    // SkPaint::measureText                         mySkPaint::measureText
+    { "_ZNK7SkPaint11measureTextEPKvj",             "_ZNK9mySkPaint11measureTextEPKvj", 0, 0},
+    // SkPaint::getTextWidths                       mySkPaint::getTextWidths
+    { "_ZNK7SkPaint13getTextWidthsEPKvjPfP6SkRect", "_ZNK9mySkPaint13getTextWidthsEPKvjPfP6SkRect", 0, 0}
+};
+
 extern "C" void Java_org_sil_palaso_Graphite_loadGraphite(JNIEnv* env, jobject thiz)
 {
     int sdkVer = 10;
     const char *libgrload = "libgrload2.so";
+    if (load_fns(libgrload, "libskia.so", thismap, 12, sdkVer))
+        return;
 
-    SLOGD("Loading in SDK version %d", sdkVer);
-    if (setup_grandroid(env, thiz, libgrload, sdkVer)) return;
-    SLOGD("Now version 2 stuff");
-    if (setup_grload2(env, thiz, sdkVer, libgrload)) return;
-
-    // cleanup
     SLOGD("Returning from graphite load");
 }
-#endif

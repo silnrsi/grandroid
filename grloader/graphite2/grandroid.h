@@ -52,5 +52,6 @@ SkTypeface *grCreateFromName(const char name[], SkTypeface::Style style);
 fontmap *fm_from_tf(SkTypeface *tf);
 int getSDKVersion(JNIEnv *env);
 bool setup_grandroid(JNIEnv* env, jobject thiz, const char *libgrload, int sdkVer);
+SkTypeface *tf_from_name(const char *name);
 }
 #endif

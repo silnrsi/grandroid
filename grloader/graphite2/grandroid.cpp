@@ -39,7 +39,7 @@
 class FontPlatformData;
 
 static fontmap *myfonts = NULL;
-static SkTypeface *tf_from_name(const char *name)
+SkTypeface *tf_from_name(const char *name)
 {
     fontmap *f;
     for (f = myfonts; f; f = f->next)
@@ -247,7 +247,11 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
     f->next = myfonts;
     f->tf = tf;
     f->asset = asset;
+#if (GRLOAD_API < 11)
+    f->name = rtl ? "" : name;
+#else
     f->name = name;
+#endif
     f->rtl = rtl ? 7 : 0;
     if (!gFTLibrary && FT_Init_FreeType(&gFTLibrary))
     {
@@ -284,7 +288,7 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
         parse_features(f->grface, f->grfeats, env, feats);
     
     myfonts = f;
-#if 0
+#if (GRLOAD_API < 11)
     if (rtl)
     {
         SkTypeface *tfw = SkTypeface::CreateFromStream(aStream);

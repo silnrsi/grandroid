@@ -213,10 +213,10 @@ unsigned short *find4calls(unsigned short *curr)
 Elf32_Addr findsymbol(const char *targetname, Elf32_Addr srcfn)
 {
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
-    unsigned *gotaddr = got_addr(soTarget, srcfn);
-    SLOGD("Found got addr %p", gotaddr);
-    if (!gotaddr) return 0;
-    unsigned *pltaddr = plt_addr_arm(soTarget, gotaddr);
+//    unsigned *gotaddr = got_addr(soTarget, srcfn);
+//    SLOGD("Found got addr %p", gotaddr);
+//    if (!gotaddr) return 0;
+    unsigned *pltaddr = plt_addr_arm(soTarget, srcfn);
     SLOGD("Found pltaddr %p", pltaddr);
     if (!pltaddr) return 0;
     Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));

@@ -249,10 +249,10 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, size_t, void *), void *);
 
 bool load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer);
 bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer);
-unsigned *got_addr(const soinfo *si, unsigned fn);
+//unsigned *got_addr(const soinfo *si, unsigned fn);
 
 #ifdef ANDROID_ARM_LINKER
-unsigned *plt_addr_arm(const soinfo *si, unsigned *gaddr);
+unsigned *plt_addr_arm(const soinfo *si, unsigned gaddr);
 Elf32_Addr scan_call_arm(const soinfo *si, Elf32_Addr paddr);
 Elf32_Addr scan_sof_arm(const soinfo *si, Elf32_Addr paddr, int num, int backwards);
 #endif

@@ -29,12 +29,11 @@ LOCAL_SRC_FILES := ${BASE_PATH}/grload2.cpp ${BASE_PATH}/grandroid.cpp ${BASE_PA
 LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/stlport/stlport \
         ${SRC}/bionic \
-        ${SRC}/skia/include/core \
         ${SRC}/frameworks/base/include \
         ${SRC}/system/core/include \
         ${SRC} \
-        ${SRC}/skia/include/core \
-        ${SRC}/skia/src/core \
+        ${SRC}/skia2/include/core \
+        ${SRC}/skia2/src/core \
         ${SRC}/harfbuzz/contrib \
         ${SRC}/harfbuzz/src \
         ${SRC}/freetype/include

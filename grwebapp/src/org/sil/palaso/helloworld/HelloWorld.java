@@ -48,7 +48,7 @@ public class HelloWorld extends Activity {
         Graphite.loadGraphite();
         Log.v("HelloWorld", "Graphite loaded");
     	mtfp = (Typeface)Graphite.addFontResource(getAssets(), "Padauk.ttf", "padauk", 0, "shn", "wtri=1; utal=1");
-        mtfs = (Typeface)Graphite.addFontResource(getAssets(), "Scheherazade-R.ttf", "scher", 0, "", "");
+        mtfs = (Typeface)Graphite.addFontResource(getAssets(), "Scheherazade-R.ttf", "scher", 1, "", "");
         super.onCreate(savedInstanceState);
     }
 
