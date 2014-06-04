@@ -305,6 +305,8 @@ void reloca_fns(soinfo *si, Elf32_Rela *rela, unsigned count, func_map *map, uns
 }
 #endif
 
+#if (GRLOAD_API > 10)
+
 bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
 {
     soinfo *soSrc = (soinfo *)dlopen(srclib, 0);
@@ -467,3 +469,4 @@ Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn
     //phdr_table_set_load_prot(soTarget->phdr, soTarget->phnum, soTarget->base, 0);
 }
 
+#endif // GRLOAD_API > 10

@@ -29,7 +29,8 @@
 #include "graphite2/Segment.h"
 #include <dlfcn.h>
 #include "_linker.h"
-#include "harfbuzz.h"
+//#include "harfbuzz.h"
+#include "harfbuzz-shaper.h"
 #include "SkPaint.h"
 #include "FontPlatformData.h"
 #include "cutils/log.h"
@@ -68,10 +69,21 @@ static gr_uint32 script_tags[] = {
         0                               /* HB_Script_Inherited */
 };
 
+static float gr_hb_advance(const void *hb_item, unsigned short gid)
+{
+    HB_Glyph glyph = gid;
+    HB_Fixed res;
+    HB_Font font = reinterpret_cast<const HB_ShaperItem *>(hb_item)->font;
+    HB_Face face = reinterpret_cast<const HB_ShaperItem *>(hb_item)->face;
+    font->klass->getGlyphAdvances(font, &glyph, 1, &res, face->current_flags);
+    return res;
+}
+    
+
 bool grHBShape(HB_ShaperItem *item, gr_face *face, float size, bool isTextView, gr_feature_val *feats)
 {
     int isrtl = item->item.bidiLevel & 1;
-    gr_font *font = gr_make_font(size * 64, face);
+    gr_font *font = gr_make_font_with_advance_fn(size * 64, item, &gr_hb_advance, face);
     gr_segment *seg = gr_make_seg(font, face,
             item->item.script < HB_Script_Inherited ? script_tags[item->item.script] : 0, feats,
             gr_utf16, item->string + item->item.pos, item->item.length, isrtl ? 7 : 0);
@@ -108,7 +120,6 @@ bool grHBShape(HB_ShaperItem *item, gr_face *face, float size, bool isTextView, 
         }
         if (!isTextView)
             continue;
-        //*cp = gr_cinfo_base(gr_seg_cinfo(seg, gr_slot_before(is)));
 
         if (!gr_slot_can_insert_before(is) && cp > item->log_clusters)
             *cp = cp[-1];
@@ -125,14 +136,12 @@ extern "C" bool grHB_ShapeItem_tf(HB_ShaperItem *item)
     SkPaint *paint = (SkPaint *)(item->font->userData);
     SkTypeface *tf = paint->getTypeface();
     fontmap *f = fm_from_tf(tf);
-    //SLOGD("grHB_ShapeItem_tf(%p->%p)", tf, face);
     if (!f || !f->grface) return HB_ShapeItem(item);
     else return grHBShape(item, f->grface, paint->getTextSize(), 1, f->grfeats);
 }
 
 extern "C" bool grHB_ShapeItem_pf(HB_ShaperItem *item)
 {
-    //SLOGD("grHB_ShapeItem_pf");
     FontPlatformData *pf = (FontPlatformData *)(item->font->userData);
     SkTypeface *tf = pf->typeface();
     fontmap *f = fm_from_tf(tf);
@@ -142,7 +151,6 @@ extern "C" bool grHB_ShapeItem_pf(HB_ShaperItem *item)
 
 void *grSetupComplexFont(void *t, int script, void *platformData)
 {
-//    SLOGD("grSetupComplexFont");
     return platformData;
 }
 
@@ -164,7 +172,7 @@ extern "C" bool setup_grload4(JNIEnv *env, jobject thiz, int sdkVer, const char 
             aSetupComplexFont = findfn("libwebcore.so", "libskia.so", "_ZN10SkTypeface14CreateFromFileEPKc", 1, 1);
         else
             aSetupComplexFont = findfn("libwebcore.so", "libskia.so", "_Z25SkCreateTypefaceForScript9HB_ScriptN10SkTypeface5StyleEN7SkPaint11FontVariantE", 1, 1);
-        SLOGD("Found setupComplexFont at %x", aSetupComplexFont);
+        //SLOGD("Found setupComplexFont at %x", aSetupComplexFont);
         if (!aSetupComplexFont || hook_code("libwebcore.so", reinterpret_cast<void *>(grSetupComplexFont), reinterpret_cast<void *>(aSetupComplexFont), sdkVer))
         {
             SLOGD("Hooking failed");
@@ -183,7 +191,6 @@ extern "C" void Java_org_sil_palaso_Graphite_loadGraphite(JNIEnv* env, jobject t
     if (setup_grandroid(env, thiz, libgrload, sdkVer)) return;
     if (setup_grload4(env, thiz, sdkVer, libgrload)) return;
 
-    // cleanup
-    SLOGD("Returning from graphite load");
+    // SLOGD("Returning from graphite load");
 }
 #endif

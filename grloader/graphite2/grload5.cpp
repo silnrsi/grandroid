@@ -58,6 +58,11 @@ static void grensure(size_t num)
     }
 }
 
+static float gr_hbng_advance(const void *hb_font, unsigned short gid)
+{
+    return const_cast<hb_font_t *>(reinterpret_cast<const hb_font_t *>(hb_font))->get_glyph_h_advance(gid);
+}
+
 extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feature_t *features, unsigned int num_features)
 {
     //SLOGD("grhbng_shape(font=%p, buffer=%p. face=%p, user_data=%p", font, buffer, font->face, font->face->user_data);
@@ -65,7 +70,7 @@ extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feat
     if (!f || !f->grface)
         return hb_shape(font, buffer, features, num_features);
     gr_face *grface = f->grface;
-    gr_font *grfont = gr_make_font(font->x_scale, grface);
+    gr_font *grfont = gr_make_font_with_advance_fn(font->x_scale, font, &gr_hbng_advance, grface);
     
     gr_segment *seg = NULL;
     const gr_slot *is;
@@ -144,7 +149,6 @@ extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feat
     }
     ci++;
 
-    //buffer->clear_output ();
     for (unsigned int i = 0; i < ci; ++i)
     {
         for (unsigned int j = 0; j < clusters[i].num_glyphs; ++j)
@@ -155,7 +159,6 @@ extern "C" void grhbng_shape(hb_font_t *font, hb_buffer_t *buffer, const hb_feat
         }
     }
     buffer->len = glyph_count;
-    //buffer->swap_buffers ();
 
     if (HB_DIRECTION_IS_BACKWARD(buffer->props.direction))
         curradvx = gr_seg_advance_X(seg);
