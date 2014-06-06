@@ -276,16 +276,19 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
     f->grface = gr_make_face_with_ops(face, &ops, gr_face_preloadAll);
     f->ftface = face;
     // can't free the face since it's owned by grface now, and face needs asset
-    if (!f->grface) SLOGD("Failed to create graphite font");
+    if (f->grface)
+    {
+        // Now handle lang and feats
+        if (env->GetStringLength(lang))
+            f->grfeats = gr_face_featureval_for_lang(f->grface, jgettag(env, lang));
+        else
+            f->grfeats = gr_face_featureval_for_lang(f->grface, 0);
 
-    // Now handle lang and feats
-    if (env->GetStringLength(lang))
-        f->grfeats = gr_face_featureval_for_lang(f->grface, jgettag(env, lang));
+        if (env->GetStringLength(feats))
+            parse_features(f->grface, f->grfeats, env, feats);
+    }
     else
-        f->grfeats = gr_face_featureval_for_lang(f->grface, 0);
-
-    if (env->GetStringLength(feats))
-        parse_features(f->grface, f->grfeats, env, feats);
+        SLOGD("Failed to create graphite font");
     
     myfonts = f;
 #if (GRLOAD_API < 11)

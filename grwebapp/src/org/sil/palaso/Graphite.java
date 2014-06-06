@@ -33,7 +33,7 @@ public class Graphite {
     public static native Object addFontResource(Object assets, String asset_name, String font_name, int rtl, String lang, String feats);
 
     static {
-        System.loadLibrary("graphite2");
+        System.loadLibrary("graphite2an");
         if (android.os.Build.VERSION.SDK_INT < 11)
             System.loadLibrary("grload2");
         else if (android.os.Build.VERSION.SDK_INT < 18)

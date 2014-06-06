@@ -24,5 +24,11 @@
         android:layout_height="wrap_content" 
         android:text="@string/hello"
         />
+    <TextView  
+        android:id="@+id/tv3"
+        android:layout_width="fill_parent" 
+        android:layout_height="wrap_content" 
+        android:text="@string/hello"
+        />
     </LinearLayout>
 </ScrollView>

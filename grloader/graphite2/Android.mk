@@ -3,6 +3,7 @@
 BASE_PATH := $(APP_PROJECT_PATH)/graphite2
 include $(CLEAR_VARS)
 
+GRLIB := libgraphite2an
 GRHOME := ${BASE_PATH}/graphite_source
 _NS := GR2
 GR2_BASE := ${GRHOME}
@@ -11,7 +12,7 @@ include ${GRHOME}/src/files.mk
 
 SRC := ${BASE_PATH}/inc
 
-LOCAL_MODULE := libgraphite2
+LOCAL_MODULE := $(GRLIB)
 LOCAL_SRC_FILES := $(GR2_SOURCES)
 LOCAL_C_INCLUDES := ${GRHOME}/include ${GRHOME}/src \
         ${SRC}/stlport/stlport \
@@ -40,7 +41,7 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
 #LOCAL_ARM_MODE := arm
 LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=10
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
-LOCAL_SHARED_LIBRARIES := libgraphite2
+LOCAL_SHARED_LIBRARIES := $(GRLIB)
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/${TARGET_ARCH_ABI}
 # the following are needed to support the jni function in grandroid.cpp
 LOCAL_LDFLAGS += -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
@@ -65,7 +66,7 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/freetype/include
 LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=15
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
-LOCAL_SHARED_LIBRARIES := libgraphite2
+LOCAL_SHARED_LIBRARIES := $(GRLIB)
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/${TARGET_ARCH_ABI}
 # the following are needed to support the jni function in grandroid.cpp
 LOCAL_LDFLAGS += -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
@@ -89,7 +90,7 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/freetype/include
 LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=18
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
-LOCAL_SHARED_LIBRARIES := libgraphite2
+LOCAL_SHARED_LIBRARIES := $(GRLIB)
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/${TARGET_ARCH_ABI}
 # the following are needed to support the jni function in grandroid.cpp
 LOCAL_LDFLAGS += -lharfbuzz_ng -lharfbuzz -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
@@ -111,7 +112,7 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
         ${SRC}/freetype/include
 LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=19
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
-LOCAL_SHARED_LIBRARIES := libgraphite2
+LOCAL_SHARED_LIBRARIES := $(GRLIB)
 LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/${TARGET_ARCH_ABI}
 # the following are needed to support the jni function in grandroid.cpp
 LOCAL_LDFLAGS += -lharfbuzz_ng -lskia -lcutils -landroid -landroid_runtime -lutils -lft2
