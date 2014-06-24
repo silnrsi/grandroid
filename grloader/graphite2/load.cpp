@@ -90,7 +90,7 @@ phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
             res = -1;
             SLOGD("Failed to unprotect (%s) %x->%x [%x + %x, +%x]V%d", strerror(errno), seg_page_start, seg_page_end, phdr->p_vaddr, load_bias, phdr->p_memsz, prots);
         } else {
-            SLOGD("Unprotected %x->%x", seg_page_start, seg_page_end);
+//            SLOGD("Unprotected %x->%x", seg_page_start, seg_page_end);
         }
     }
     return res;
@@ -98,9 +98,9 @@ phdr_table_set_load_prot(const Elf32_Phdr* phdr_table,
 
 bool load_fns(const char *srcname, const char *targetname, func_map *map, int num_map, int sdkVer)
 {
-    SLOGD("load_fns %s -> %s", srcname, targetname);
+    //SLOGD("load_fns %s -> %s", srcname, targetname);
     soinfo *soHead = (soinfo *)dlopen("libdl.so", 0);
-    SLOGD("Found libdl.so at %p (base = %p)", soHead->base);
+    //SLOGD("Found libdl.so at %p (base = %p)", soHead->base);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
     SLOGD("Found %s at %p (base = %p)", targetname, soTarget, soTarget->base);
     soinfo *soSrc = (soinfo *)dlopen(srcname, 0);
@@ -108,7 +108,7 @@ bool load_fns(const char *srcname, const char *targetname, func_map *map, int nu
     soinfo *si;
     int i, j;
 
-    SLOGD("Mapping from %s to %s", srcname, targetname);
+    //SLOGD("Mapping from %s to %s", srcname, targetname);
     // turn names into pointers
     for (i = 0; i < num_map; ++i)
     {
@@ -157,7 +157,7 @@ bool load_fns(const char *srcname, const char *targetname, func_map *map, int nu
                 {
                     if (phdr_table_set_load_prot(si->phdr, si->phnum, si->base, PROT_WRITE))
                         continue;
-                    SLOGD("Relocating in %s base(%p) load_bias(%p)", si->name, si->base, si->load_bias);
+                    //SLOGD("Relocating in %s base(%p) load_bias(%p)", si->name, si->base, si->load_bias);
 //                    ((void **)d)[1] = soSrc;
                     if (si->plt_rel)
                         reloc_fns(si, si->plt_rel, si->plt_rel_count, map, num_map, bias);
@@ -240,7 +240,7 @@ void reloc_fns(soinfo *si, Elf32_Rel *rel, unsigned count, func_map *map, unsign
         {
             if ((map[imap].sonly == NULL || !strcmp(si->name, map[imap].sonly)) && !strcmp(strtab + symtab[sym].st_name, map[imap].starget))
             {
-                SLOGD("Relocating %s, type=%d at %p", map[imap].starget, type, roffset);
+                //SLOGD("Relocating %s, type=%d at %p", map[imap].starget, type, roffset);
                 switch(type)
                 {
         #if defined(ANDROID_ARM_LINKER)
@@ -253,7 +253,7 @@ void reloc_fns(soinfo *si, Elf32_Rel *rel, unsigned count, func_map *map, unsign
         #else
             #error("No linker type specified")
         #endif
-                    SLOGD("Current = %p, expected = %p, changing to = %p", *(void **)roffset, map[imap].ptarget, map[imap].psrc);
+                    //SLOGD("Current = %p, expected = %p, changing to = %p", *(void **)roffset, map[imap].ptarget, map[imap].psrc);
                     *(void **)roffset = map[imap].psrc;
                     break;
                 default :
@@ -317,7 +317,7 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
         return true;
 #if defined(ANDROID_ARM_LINKER)
     unsigned short *ptgt = reinterpret_cast<unsigned short *>(tgtfn);
-    SLOGD("Hooking %p to %p", ptgt, srcfn);
+    //SLOGD("Hooking %p to %p", ptgt, srcfn);
 // must use thumb code here
     int i = -1;
     ptgt[++i] = 0xF8DF;   // LDR PC, [PC, #0]
@@ -333,15 +333,15 @@ bool hook_code(const char *srclib, void *srcfn, void *tgtfn, int sdkVer)
     phdr_table_set_load_prot(soSrc->phdr, soSrc->phnum, bias, 0);
     pthread_mutex_unlock(&dl_lock);
     ptgt = reinterpret_cast<unsigned short *>(reinterpret_cast<unsigned>(tgtfn) & 0xFFFFFFF0);
-    SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt, ptgt[0], ptgt[1], ptgt[2], ptgt[3], ptgt[4], ptgt[5], ptgt[6], ptgt[7]);
-    SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt+8, ptgt[8], ptgt[9], ptgt[10], ptgt[11], ptgt[12], ptgt[13], ptgt[14], ptgt[15]);
+    //SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt, ptgt[0], ptgt[1], ptgt[2], ptgt[3], ptgt[4], ptgt[5], ptgt[6], ptgt[7]);
+    //SLOGD("%p: %04x%04x %04x%04x %04x%04x %04x%04x", ptgt+8, ptgt[8], ptgt[9], ptgt[10], ptgt[11], ptgt[12], ptgt[13], ptgt[14], ptgt[15]);
     return false;
 }
 
 unsigned *got_addr(const soinfo *si, unsigned fn)
 {
     unsigned *g = si->plt_got;
-    SLOGD("Searching got at %p", g);
+    //SLOGD("Searching got at %p", g);
     int i;
     for (i = 0; i < si->plt_rel_count; ++i, ++g)
     {
@@ -360,7 +360,7 @@ unsigned *plt_addr_arm(const soinfo *si, unsigned gaddr)
     unsigned *p, *pend, *pstart;
     int i;
     pstart = 0;
-    SLOGD("Searching for start of plt at %p from %p + %x", plt, si->rel, si->rel_count);
+    //SLOGD("Searching for start of plt at %p from %p + %x", plt, si->rel, si->rel_count);
     for (p = plt, pend = plt + 2048; p < pend; ++p)  // scan to find first plt entry
     {
         if ((*p & 0xFFEFF000) == 0xE28FC000)        // search for an ADD IP, PC, #x of some kind
@@ -371,7 +371,7 @@ unsigned *plt_addr_arm(const soinfo *si, unsigned gaddr)
     }
     if (!pstart) return 0;
     pend = pstart + si->plt_rel_count * 3;
-    SLOGD("Search for %d entries from %p to %p", si->plt_rel_count, pstart, pend);
+    //SLOGD("Search for %d entries from %p to %p", si->plt_rel_count, pstart, pend);
     for (p = pstart, i = 0; i < si->plt_rel_count; ++i, ++p)
     {
         unsigned offset = 0;
@@ -405,7 +405,7 @@ Elf32_Addr scan_call_arm(const soinfo *si, Elf32_Addr paddr)
     unsigned short *end = reinterpret_cast<unsigned short *>(si->init_array);     // waaay off the end, but hey we have to stop somewhere!
         // put code in here to handle si->init_array being 0, so go to end of section (find appropriate section, get its end)
     unsigned short *p;
-    SLOGD("Scanning from %p to %p", start, end);
+    //SLOGD("Scanning from %p to %p", start, end);
     for (p = start; p < end; ++p)
     {
         unsigned v = (p[0] << 16) | p[1];
@@ -416,7 +416,7 @@ Elf32_Addr scan_call_arm(const soinfo *si, Elf32_Addr paddr)
                 return reinterpret_cast<unsigned>(p);
         }
     }
-    SLOGD("Stopped searching at %p", p);
+    //SLOGD("Stopped searching at %p", p);
     return 0;
 }
 
@@ -425,7 +425,7 @@ Elf32_Addr scan_sof_arm(const soinfo *si, Elf32_Addr paddr, int num, int backwar
     unsigned short *end = backwards ? reinterpret_cast<unsigned short *>(si->rel + si->rel_count + si->plt_rel_count) 
                                     : reinterpret_cast<unsigned short *>(si->init_array);
     unsigned short *p = reinterpret_cast<unsigned short *>(paddr);
-    SLOGD("Scanning for sof from %p to %p", p, end);
+    //SLOGD("Scanning for sof from %p to %p", p, end);
     while (p != end)
     {
         if ((((p[0] << 16 | p[1]) & 0xFFFF4000) == 0xE92D4000
@@ -451,16 +451,16 @@ Elf32_Addr findcallsite(const soinfo *soTarget, const char *srcname, const char 
     //SLOGD("Found got addr %p", gotaddr);
     //if (!gotaddr) return 0;
     unsigned *pltaddr = plt_addr_arm(soTarget, reinterpret_cast<unsigned>(fnSrc));
-    SLOGD("Found pltaddr %p", pltaddr);
+    //SLOGD("Found pltaddr %p", pltaddr);
     if (!pltaddr) return 0;
     Elf32_Addr callsite = scan_call_arm(soTarget, reinterpret_cast<Elf32_Addr>(pltaddr));
-    SLOGD("Found callsite %x", callsite);
+    //SLOGD("Found callsite %x", callsite);
     return callsite;
 }
 
 Elf32_Addr findfn(const char *targetname, const char *srcname, const char *srcfn, int num, int backwards)
 {
-    SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
+    //SLOGD("Finding fn in %s based on %s in %s", targetname, srcfn, srcname);
     soinfo *soTarget = (soinfo *)dlopen(targetname, 0);
     //phdr_table_set_load_prot(soTarget->phdr, soTarget->phnum, soTarget->base, PROT_READ);
     Elf32_Addr callsite = findcallsite(soTarget, srcname, srcfn);

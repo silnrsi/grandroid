@@ -22,7 +22,7 @@ LOCAL_CFLAGS := -mapcs -DGRAPHITE2_NSEGCACHE -DGRAPHITE2_NTRACING -DNDEBUG
 LOCAL_LDFLAGS := -L$(BASE_PATH)/../srclibs
 include $(BUILD_SHARED_LIBRARY)
 
-ifeq ($(TARGET_ARCH_ABI),armeabi)
+#ifeq ($(TARGET_ARCH_ABI),armeabi)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libgrload2
@@ -42,11 +42,11 @@ LOCAL_C_INCLUDES := ${GRHOME}/include \
 LOCAL_CFLAGS := -mapcs -DANDROID_ARM_LINKER -DGRLOAD_API=10
 LOCAL_CFLAGS += -include "$(SRC)/system/core/include/arch/linux-arm/AndroidConfig.h"
 LOCAL_SHARED_LIBRARIES := $(GRLIB)
-LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/${TARGET_ARCH_ABI}
+LOCAL_LDFLAGS := -L$(BASE_PATH)/srclibs/armeabi
 # the following are needed to support the jni function in grandroid.cpp
 LOCAL_LDFLAGS += -lskia -lcutils -landroid -landroid_runtime -lutils -lft2_local
 include $(BUILD_SHARED_LIBRARY)
-endif
+#endif
 
 ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
 include $(CLEAR_VARS)

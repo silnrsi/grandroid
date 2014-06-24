@@ -223,6 +223,12 @@ extern "C" jobject Java_org_sil_palaso_Graphite_addFontResource( JNIEnv *env, jo
     
     const char *str = env->GetStringUTFChars(jpath, NULL);
     AAsset *asset = AAssetManager_open(mgr, str, AASSET_MODE_BUFFER);
+    if (!asset)
+    {
+        jclass except = env->FindClass("android/content/res/Resources$NotFoundException");
+        env->ThrowNew(except, "Missing asset file for font resource");
+        return 0;
+    }
     SkMemoryStream *aStream = new SkMemoryStream(AAsset_getBuffer(asset), AAsset_getLength(asset), false);
     SLOGD("asset(%p) size=%d, vtable(%p)", asset, AAsset_getLength(asset), *(void **)aStream);
     SkTypeface * tf = SkTypeface::CreateFromStream(aStream);
