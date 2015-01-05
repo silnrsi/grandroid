@@ -1,0 +1,5 @@
+#!/bin/sh
+
+ulimit -v unlimited
+~/Work/android/android-ndk-r9d/ndk-build NDK_PROJECT_PATH=. NDK_APPLICATION_MK=Application.mk $@
+
